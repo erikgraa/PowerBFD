@@ -1,0 +1,72 @@
+name: Container
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      push:
+        description: 'Push the image to GHCR (otherwise build and smoke test only)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/powerbfd
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and smoke test (amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Containerfile
+          load: true
+          tags: powerbfd:test
+
+      - name: Smoke test
+        run: |
+          docker run --rm --entrypoint pwsh powerbfd:test -NoProfile -Command \
+            "Import-Module PowerBFD; if (-not (Get-Command -Module PowerBFD)) { exit 1 }; (Get-Module PowerBFD).Version.ToString()"
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' || inputs.push
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=dispatch,enable=${{ github.ref_type != 'tag' }}
+          labels: |
+            org.opencontainers.image.description=PowerBFD in a PowerShell container. Lab use only.
+
+      - name: Build and push (amd64, arm64)
+        if: github.event_name == 'push' || inputs.push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Containerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

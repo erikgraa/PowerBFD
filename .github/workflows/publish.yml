@@ -37,7 +37,7 @@ jobs:
         run: |
           $stage = Join-Path $env:RUNNER_TEMP 'stage'
           New-Item $stage -ItemType Directory | Out-Null
-          Get-ChildItem . -Force | Where-Object Name -NotIn '.git', '.github', 'Tests', 'tools' | Copy-Item -Destination $stage -Recurse
+          Get-ChildItem . -Force | Where-Object Name -NotIn '.git', '.github', 'Tests', 'tools', 'Containerfile', '.dockerignore' | Copy-Item -Destination $stage -Recurse
           ./tools/Build-Nupkg.ps1 -Source $stage -OutDir "$env:RUNNER_TEMP/out"
       - name: Push to PowerShell Gallery
         if: github.event_name == 'push' || inputs.dry_run == false

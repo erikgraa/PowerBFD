@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Icon and PowerShell Gallery badge.
+- Container image on GHCR (`ghcr.io/erikgraa/powerbfd`, amd64 and arm64), built by the `Container` workflow on each release. No module changes.
+
 ## 0.1.0
 
 Initial release, extracted from the BFD code in [PowerBGP](https://github.com/erikgraa/PowerBGP) and generalised into a standalone module.

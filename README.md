@@ -1,5 +1,8 @@
-# PowerBFD
+# 🛰️ PowerBFD
 
+<p align="center"><img src="icon.png" alt="PowerBFD icon" width="128"></p>
+
+[![PowerShell Gallery](https://img.shields.io/powershellgallery/v/PowerBFD?label=PSGallery)](https://www.powershellgallery.com/packages/PowerBFD)
 [![Tests](https://github.com/erikgraa/PowerBFD/actions/workflows/tests.yml/badge.svg)](https://github.com/erikgraa/PowerBFD/actions/workflows/tests.yml)
 
 Stand up **BFD** (Bidirectional Forwarding Detection) test peers straight from PowerShell, inject faults and craft or decode BFD packets byte by byte. Built for PowerShell 7.4+ on Windows and Linux, no external modules and no web UI.
@@ -127,6 +130,23 @@ Rules for the hook:
 * For hosts that prefer polling, `Get-BfdSession` (`State`, `Diagnostic`, `UpSince`) and `Get-BfdEvent -Type StateChange` expose the same information.
 
 Typical uses: PowerBGP drops its BGP session (Cease, or just closes the TCP connection) when BFD for that neighbour goes Down; PowerOSPF kills the adjacency on BFD Down and lets it form again on Up.
+
+## 🐳 Container
+
+A ready-made image (amd64 and arm64) is published to GHCR on each release:
+
+```bash
+podman run -it --rm --network host ghcr.io/erikgraa/powerbfd:latest
+```
+
+Or build it yourself from the included `Containerfile`:
+
+```bash
+podman build -f Containerfile -t powerbfd .
+podman run -it --rm --network host powerbfd
+```
+
+Host networking lets sessions reach your lab devices. With `--network host`, `-p` is ignored: the container uses the host's IP and ports directly. Allow UDP 3784 and 4784 (and 3785 for echo) in the host firewall, make sure nothing else (FRR, BIRD) holds those ports, and use `-LocalAddress` to pick the source IP. On Windows, Docker Desktop and default WSL2 networking do not expose your Windows IP; use Podman in WSL with `networkingMode=mirrored`.
 
 ## Tests
 
