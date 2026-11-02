@@ -1,0 +1,51 @@
+name: Publish
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and verify only, do not push to the Gallery'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check version
+        shell: pwsh
+        run: |
+          $v = (Import-PowerShellDataFile ./PowerBFD.psd1).ModuleVersion
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$v") {
+            throw "Tag $env:GITHUB_REF_NAME does not match manifest version $v."
+          }
+          "VERSION=$v" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Pester
+        shell: pwsh
+        run: |
+          Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser
+          $r = Invoke-Pester ./Tests -Output Minimal -PassThru
+          if ($r.FailedCount) { exit 1 }
+      - name: Build package
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'stage'
+          New-Item $stage -ItemType Directory | Out-Null
+          Get-ChildItem . -Force | Where-Object Name -NotIn '.git', '.github', 'Tests', 'tools' | Copy-Item -Destination $stage -Recurse
+          ./tools/Build-Nupkg.ps1 -Source $stage -OutDir "$env:RUNNER_TEMP/out"
+      - name: Push to PowerShell Gallery
+        if: github.event_name == 'push' || inputs.dry_run == false
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: dotnet nuget push "$RUNNER_TEMP/out/PowerBFD.$VERSION.nupkg" --source https://www.powershellgallery.com/api/v2/package/ --api-key "$PSGALLERY_API_KEY"
+      - name: GitHub release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
