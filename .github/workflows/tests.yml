@@ -1,0 +1,48 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pester:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        pwsh: ['7.4.22', '7.5.13']
+    name: ${{ matrix.os }} / PowerShell ${{ matrix.pwsh }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PowerShell ${{ matrix.pwsh }}
+        shell: pwsh
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'pwsh'
+          $v = '${{ matrix.pwsh }}'
+          $file = if ($IsWindows) { "PowerShell-$v-win-x64.zip" } else { "powershell-$v-linux-x64.tar.gz" }
+          $out = Join-Path $env:RUNNER_TEMP $file
+          Invoke-WebRequest "https://github.com/PowerShell/PowerShell/releases/download/v$v/$file" -OutFile $out
+          New-Item $dest -ItemType Directory | Out-Null
+          if ($IsWindows) { Expand-Archive $out $dest } else { tar -xzf $out -C $dest; chmod +x "$dest/pwsh" }
+          $dest | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Show version
+        shell: pwsh
+        run: $PSVersionTable.PSVersion
+      - name: Pester
+        shell: pwsh
+        run: |
+          Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser
+          $r = Invoke-Pester ./Tests -Output Detailed -PassThru
+          if ($r.FailedCount) { exit 1 }
+      - name: Manifest
+        shell: pwsh
+        run: Test-ModuleManifest ./PowerBFD.psd1
+      - name: PSScriptAnalyzer (errors only)
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $e = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error
+          $e | Format-Table
+          if ($e) { exit 1 }
